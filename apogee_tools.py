@@ -36,6 +36,7 @@ class ApogeeAddonPreferences(AddonPreferences):
         layout.prop(self, "half_res")
         layout.prop(self, "quarter_res")
 
+# Utilities
 
 def dump_dict_to_json(slots_status):
     file_name = bpy.context.blend_data.filepath[:-6]
@@ -47,6 +48,44 @@ def read_dict_from_json():
     with open('{}.json'.format(file_name)) as json_file:
         return json.load(json_file)
 
+#Methods
+def get_slots_in_selection(self,context):
+    slots = read_dict_from_json()
+    for object in context.selected_objects:
+        if object.type == 'EMPTY' and object.instance_collection is not None:
+            for obj in bpy.data.collections[object.instance_collection.name].all_objects:
+                if obj.name in slots and 'overriden' in slots[obj.name]:
+                    continue
+                slots.update(get_initial_material_slots_as_dict(obj))
+        elif object.material_slots is not None and len(object.material_slots) > 0:
+            if object.name in slots and 'overriden' in slots[object.name]:
+                continue
+            slots.update(get_initial_material_slots_as_dict(object))
+    return slots
+
+def override_selection_materials(self,context,mat_override):
+    slots = read_dict_from_json()
+    for object in context.selected_objects:
+        if object.type == 'EMPTY' and object.instance_collection is not None:
+            for obj in bpy.data.collections[object.instance_collection.name].all_objects:
+                overriden = override_object_materials(obj,mat_override)
+                slots[obj.name].update(overriden)
+        elif object.material_slots is not None and len(object.material_slots) > 0:
+            overriden = override_object_materials(object,mat_override)
+            slots[object.name].update(overriden)
+    return slots
+
+def remove_override_selection(self,context):
+    slots = read_dict_from_json()
+    for object in context.selected_objects:
+        if object.type == 'EMPTY' and object.instance_collection is not None:
+            for obj in bpy.data.collections[object.instance_collection.name].all_objects:
+                remove_object_override_materials(obj.name,slots[obj.name]['original'])
+                slots[obj.name].pop('overriden',None)
+        elif object.material_slots is not None and len(object.material_slots) > 0:
+            remove_object_override_materials(object.name,slots[object.name]['original'])
+            slots[object.name].pop('overriden',None)
+    return slots
 
 def reset_path_to_default(context,path):
     '''We reset the path to its default, i.e. the path links to folder names Textures'''
@@ -86,11 +125,19 @@ def change_images_path(self,context,resolution=None):
 
 
 
+class OBJECT_OT_OVERRIDE_SELECTION_MATERIAL(Operator):
+    """Override all the materials in the current selection and store original materials in a json"""
+    bl_idname = "apogee.override_materials"
+    bl_label = "Override selected object materials"
+    bl_options = {'REGISTER', 'UNDO'}
 
+    def execute(self,context):
+        get_slots_in_selection(self,context)
+        override_selection_materials(self,context,bpy.data.materials[0])
 
 class OBJECT_OT_images_half_res(Operator):
     """Change the path of all the textures in file to half of their resolution"""
-    bl_idname = "object.textures_half_size"
+    bl_idname = "apogee.textures_half_size"
     bl_label = "half size textures"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -103,7 +150,7 @@ class OBJECT_OT_images_half_res(Operator):
 
 class OBJECT_OT_images_full_res(Operator):
     """Change the path of all the textures in file to their full resolution"""
-    bl_idname = "object.textures_full_size"
+    bl_idname = "apogee.textures_full_size"
     bl_label = "full size textures"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -113,7 +160,7 @@ class OBJECT_OT_images_full_res(Operator):
 
 class OBJECT_OT_images_quarter_res(Operator):
     """Change the path of all the textures in file to quarter of their resolution"""
-    bl_idname = "object.textures_quarter_size"
+    bl_idname = "apogee.textures_quarter_size"
     bl_label = "quarter size textures"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -139,12 +186,11 @@ class VIEW3D_PT_apogee_tools_panel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        # Different sizes in a row
         layout.label(text="Change textures sizes:")
         row = layout.row(align=True)
-        row.operator("object.textures_full_size",text="Full Size")
-        row.operator("object.textures_half_size",text="Half Size")
-        row.operator("object.textures_quarter_size",text="Quarter Size")
+        row.operator("apogee.textures_full_size",text="Full Size")
+        row.operator("apogee.textures_half_size",text="Half Size")
+        row.operator("apogee.textures_quarter_size",text="Quarter Size")
 
 
 # Registration
