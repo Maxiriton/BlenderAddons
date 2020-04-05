@@ -11,8 +11,8 @@ bl_info = {
 }
 
 import bpy
-from bpy.types import Operator,AddonPreferences
-from bpy.props import StringProperty
+from bpy.types import Operator,AddonPreferences,Panel,PropertyGroup
+from bpy.props import StringProperty,PointerProperty,EnumProperty
 from os import listdir,mkdir,path
 from os.path import isfile, join,basename,dirname,exists
 import json
@@ -36,6 +36,7 @@ class ApogeeAddonPreferences(AddonPreferences):
         layout.prop(self, "half_res")
         layout.prop(self, "quarter_res")
 
+
 # Utilities
 
 def dump_dict_to_json(slots_status):
@@ -48,9 +49,27 @@ def read_dict_from_json():
     with open('{}.json'.format(file_name)) as json_file:
         return json.load(json_file)
 
+def get_initial_material_slots_as_dict(object):
+    return {object.name:{'original':[slot.material.name for slot in object.material_slots]}}
+
+def override_object_materials(object,mat_override):
+    for slot in object.material_slots:
+        slot.material = bpy.data.materials[mat_override]
+    return {'overriden':[slot.material.name for slot in object.material_slots]}
+
+def remove_object_override_materials(object_name,original_materials):
+    obj = bpy.data.objects[object_name]
+    i = 0
+    for slot in obj.material_slots:
+        slot.material = bpy.data.materials[original_materials[i]]
+        i+=1
+
 #Methods
 def get_slots_in_selection(self,context):
-    slots = read_dict_from_json()
+    try :
+        slots = read_dict_from_json()
+    except:
+        slots = {}
     for object in context.selected_objects:
         if object.type == 'EMPTY' and object.instance_collection is not None:
             for obj in bpy.data.collections[object.instance_collection.name].all_objects:
@@ -132,8 +151,29 @@ class OBJECT_OT_OVERRIDE_SELECTION_MATERIAL(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self,context):
-        get_slots_in_selection(self,context)
-        override_selection_materials(self,context,bpy.data.materials[0])
+        if not bpy.context.blend_data.filepath:
+            self.report({'WARNING'},'Please save the file first')
+            return {'FINISHED'}
+        if not context.scene.apogee_override_material:
+            self.report({'WARNING'},'Select a material first !')
+            return {'FINISHED'}
+        slots = get_slots_in_selection(self,context)
+        dump_dict_to_json(slots)
+        slots = override_selection_materials(self,context,context.scene.apogee_override_material)
+        dump_dict_to_json(slots)
+        return {'FINISHED'}
+
+class OBJECT_OT_DELETE_OVERRIDE(Operator):
+    """Delete Override"""
+    bl_idname = "apogee.delete_override"
+    bl_label = "Delete override on selection"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self,context):
+        slots = remove_override_selection(self,context)
+        dump_dict_to_json(slots)
+        return {'FINISHED'}
+
 
 class OBJECT_OT_images_half_res(Operator):
     """Change the path of all the textures in file to half of their resolution"""
@@ -172,11 +212,11 @@ class OBJECT_OT_images_quarter_res(Operator):
         return {'FINISHED'}
 
 # User Interface
-class VIEW3D_PT_apogee_tools_panel(bpy.types.Panel):
+class VIEW3D_PT_apogee_tools_panel(Panel):
     """Panel for all Apogee Tools"""
-    bl_label = "Apogee Tools"
+    bl_label = "Texture Size"
     bl_category = "Apogee"
-    bl_idname = "VIEW3D_PT_apogee_tools_panel"
+    bl_idname = "APOGEE_PT_texture_size"
     bl_space_type = 'VIEW_3D'
     bl_region_type = "UI"
     bl_context = "objectmode"
@@ -192,22 +232,50 @@ class VIEW3D_PT_apogee_tools_panel(bpy.types.Panel):
         row.operator("apogee.textures_half_size",text="Half Size")
         row.operator("apogee.textures_quarter_size",text="Quarter Size")
 
+class APOGEE_PT_override_materials(Panel):
+    """Override material with a custom one"""
+    bl_label = "Override Material"
+    bl_category = "Apogee"
+    bl_idname = "APOGGE_PT_override_material"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_context = "objectmode"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        layout.prop_search(scene, "apogee_override_material", bpy.data, "materials",text="Material Override")
+        row = layout.row(align=True)
+        row.operator("apogee.override_materials",text="Override current selection materials")
+        row = layout.row(align=True)
+        row.operator("apogee.delete_override",text="Delete overrides")
+
 
 # Registration
 def register():
     bpy.utils.register_class(OBJECT_OT_images_half_res)
     bpy.utils.register_class(OBJECT_OT_images_full_res)
     bpy.utils.register_class(OBJECT_OT_images_quarter_res)
+    bpy.utils.register_class(OBJECT_OT_OVERRIDE_SELECTION_MATERIAL)
+    bpy.utils.register_class(OBJECT_OT_DELETE_OVERRIDE)
     bpy.utils.register_class(VIEW3D_PT_apogee_tools_panel)
+    bpy.utils.register_class(APOGEE_PT_override_materials)
     bpy.utils.register_class(ApogeeAddonPreferences)
+    bpy.types.Scene.apogee_override_material = StringProperty()
 
 
 def unregister():
     bpy.utils.unregister_class(OBJECT_OT_images_half_res)
     bpy.utils.unregister_class(OBJECT_OT_images_full_res)
     bpy.utils.unregister_class(OBJECT_OT_images_quarter_res)
+    bpy.utils.unregister_class(OBJECT_OT_OVERRIDE_SELECTION_MATERIAL)
+    bpy.utils.unregister_class(OBJECT_OT_DELETE_OVERRIDE)
     bpy.utils.unregister_class(VIEW3D_PT_apogee_tools_panel)
+    bpy.utils.unregister_class(APOGEE_PT_override_materials)
     bpy.utils.unregister_class(ApogeeAddonPreferences)
+    del bpy.types.Scene.apogee_override_material
 
 
 if __name__ == "__main__":
