@@ -50,6 +50,7 @@ def read_dict_from_json():
         return json.load(json_file)
 
 def get_initial_material_slots_as_dict(object):
+    #TODO Handle empty slots
     return {object.name:{'original':[slot.material.name for slot in object.material_slots]}}
 
 def override_object_materials(object,mat_override):
@@ -59,10 +60,11 @@ def override_object_materials(object,mat_override):
 
 def remove_object_override_materials(object_name,original_materials):
     obj = bpy.data.objects[object_name]
-    i = 0
-    for slot in obj.material_slots:
-        slot.material = bpy.data.materials[original_materials[i]]
-        i+=1
+    for slot,original_mat_name in zip(obj.material_slots,original_materials):
+        original_mat = bpy.data.materials[original_mat_name]
+        slot.material = original_mat
+        if original_mat.use_fake_user and original_mat.users > 0:
+            original_mat.use_fake_user = False
 
 #Methods
 def get_slots_in_selection(self,context):
@@ -92,6 +94,10 @@ def override_selection_materials(self,context,mat_override):
         elif object.material_slots is not None and len(object.material_slots) > 0:
             overriden = override_object_materials(object,mat_override)
             slots[object.name].update(overriden)
+
+    #we check if some materials don't have any users
+    for mat in bpy.data.materials:
+        mat.use_fake_user = mat.users == 0
     return slots
 
 def remove_override_selection(self,context):
