@@ -4,6 +4,7 @@ from os.path import isfile, join, splitext
 import imageio
 import cv2
 import numpy as np
+import sys
 
 def resize_image(image_path,image_size):
     im = Image.open(image_path)
@@ -34,8 +35,24 @@ def generate_new_resolution(source_folder,image_size=('2K',2048)):
             new = resize_image(file_path,image_size[1])
             new.save(outfile,"JPEG")
 
+def main():
+    # get the args passed to blender after "--", all of which are ignored by
+    # blender so scripts may receive their own arguments
+    argv = sys.argv
 
-source_folder = '/home/henri/Téléchargements/Brick_Rubble_rhlxZ_8K_3d_ms/textures'
-generate_new_resolution(source_folder,('4K',4096))
-generate_new_resolution(source_folder,('2K',2048))
-generate_new_resolution(source_folder,('1K',1024))
+    if "--" not in argv:
+        argv = []  # as if no args are passed
+    else:
+        argv = argv[argv.index("--") + 1:]  # get all args after "--"
+
+    source_folder = argv[0]
+    source_folder = join(source_folder,'textures')
+
+    generate_new_resolution(source_folder,('4K',4096))
+    generate_new_resolution(source_folder,('2K',2048))
+    generate_new_resolution(source_folder,('1K',1024))
+
+    print("batch job finished, exiting")
+
+if __name__ == "__main__":
+    main()
