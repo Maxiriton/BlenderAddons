@@ -48,8 +48,11 @@ def main():
     source_folder = argv[0]
     source_folder = join(source_folder,'textures')
 
+    print('Generating 4K Resolution...')
     generate_new_resolution(source_folder,('4K',4096))
+    print('Generating 2K Resolution...')
     generate_new_resolution(source_folder,('2K',2048))
+    print('Generating 1K Resolution...')
     generate_new_resolution(source_folder,('1K',1024))
 
     print("batch job finished, exiting")
