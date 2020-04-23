@@ -98,8 +98,10 @@ def clean_scene():
         bpy.data.collections.remove(collection, do_unlink=True)
 
 def save_scene(folder_path):
-    file_name ='{}.blend'.format(basename(folder_path))
+    file_name ='imported_{}.blend'.format(basename(folder_path))
     file_path = join(folder_path,file_name)
+    print("Le path est :" + file_path)
+
     bpy.ops.wm.save_as_mainfile(filepath=file_path)
 
 def get_folder_path():
@@ -126,10 +128,17 @@ def main():
         argv = argv[argv.index("--") + 1:]  # get all args after "--"
 
     folder_path = argv[0]
+    if folder_path.endswith('/'):
+        folder_path = folder_path[:-1]
     print(folder_path)
     clean_scene()
+    print('Creating Material...')
     mat = create_material(folder_path)
-    import_lod(folder_path,bpy.data.materials[0])
+    if mat:
+        print('Material Successfully created')
+    else:
+        print('Material creation failed')
+    import_lod(folder_path,mat)
     save_scene(folder_path)
 
     print("batch job finished, exiting")
