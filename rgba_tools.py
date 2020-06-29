@@ -13,9 +13,10 @@ bl_info = {
 import bpy
 from bpy.types import Operator,AddonPreferences,Panel,PropertyGroup
 from bpy.props import StringProperty,PointerProperty,EnumProperty
-from os import listdir,mkdir,path
+from os import listdir,mkdir,path,stat
 from os.path import isfile, join,basename,dirname,exists
 import json
+import datetime
 
 
 class RGBaAddonPreferences(AddonPreferences):
@@ -50,61 +51,82 @@ class RGBaAddonPreferences(AddonPreferences):
         layout.prop(self, "godot_project_folder")
         #layout.prop(self, "export_categories")
 
-#Methods
-def export_selected_collection(self,context):
+
+def get_full_path(self,context):
     preferences = context.preferences
     addon_prefs = preferences.addons[__name__].preferences
 
-    godot_folder = addon_prefs.godot_project_folder
+    godot_folder = bpy.path.abspath(addon_prefs.godot_project_folder)
     godot_cat = addon_prefs.categories
 
     folder_name = bpy.path.basename(bpy.context.blend_data.filepath)[:-6]
     file_name = f"{folder_name}.glb"
+
+    return godot_folder,godot_cat,folder_name,file_name
+
+
+#Methods
+def export_selected_collection(self,context):
+    godot_folder,godot_cat,folder_name,file_name = get_full_path(self,context)
+
+    if not exists(join(godot_folder,godot_cat)):
+        mkdir(join(godot_folder,godot_cat))
+        print(f"The folder {godot_cat} was created")
+
+    if not exists(join(godot_folder,godot_cat,folder_name)):
+        mkdir(join(godot_folder,godot_cat,folder_name))
+        print(f"The folder {folder_name} was created")
 
     export_path = join(godot_folder,godot_cat,folder_name,file_name)
 
     to_export = context.scene.godot_collection_export
     self.report({'WARNING'}, f'The collection to export is {export_path}')
 
-    to_export = context.scene.godot_collection_export
-    #on recupère la selection courante
+    collection_to_export = context.scene.godot_collection_export
 
-    # bpy.ops.export_scene.gltf(export_format='GLB',
-    #                           ui_tab='GENERAL',
-    #                           export_copyright="RGba",
-    #                           export_image_format='AUTO',
-    #                           export_texture_dir="",
-    #                           export_texcoords=True,
-    #                           export_normals=True,
-    #                           export_draco_mesh_compression_enable=False,
-    #                           export_tangents=False,
-    #                           export_materials=True,
-    #                           export_colors=True,
-    #                           export_cameras=False,
-    #                           export_selected=False,
-    #                           use_selection=False,
-    #                           export_extras=False,
-    #                           export_yup=True,
-    #                           export_apply=False,
-    #                           export_animations=True,
-    #                           export_frame_range=True,
-    #                           export_frame_step=1,
-    #                           export_force_sampling=True,
-    #                           export_nla_strips=True,
-    #                           export_def_bones=False,
-    #                           export_current_frame=False,
-    #                           export_skins=True,
-    #                           export_all_influences=False,
-    #                           export_morph=True,
-    #                           export_morph_normal=True,
-    #                           export_morph_tangent=False,
-    #                           export_lights=False,
-    #                           export_displacement=False,
-    #                           will_save_settings=False,
-    #                           filepath="",
-    #                           check_existing=True)
+    current_selection = context.selected_objects #we store the current selection
+    bpy.ops.object.select_all(action='DESELECT')
 
+    col  = context.scene.collection.children[collection_to_export]
+    for obj in col.objects:
+     obj.select_set(True)
 
+    bpy.ops.export_scene.gltf(export_format='GLB',
+                              ui_tab='GENERAL',
+                              export_copyright="RGba",
+                              export_image_format='AUTO',
+                              export_texture_dir="",
+                              export_texcoords=True,
+                              export_normals=True,
+                              export_draco_mesh_compression_enable=False,
+                              export_tangents=False,
+                              export_materials=True,
+                              export_colors=True,
+                              export_cameras=False,
+                              export_selected=False,
+                              use_selection=False,
+                              export_extras=False,
+                              export_yup=True,
+                              export_apply=False,
+                              export_animations=True,
+                              export_frame_range=True,
+                              export_frame_step=1,
+                              export_force_sampling=True,
+                              export_nla_strips=True,
+                              export_def_bones=False,
+                              export_current_frame=False,
+                              export_skins=True,
+                              export_all_influences=False,
+                              export_morph=False,
+                              export_lights=False,
+                              export_displacement=False,
+                              will_save_settings=False,
+                              filepath=export_path,
+                              check_existing=False)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in current_selection:
+        obj.select_set(True)
 
 
 class RGBA_PT_export_collection_operator(Operator):
@@ -142,16 +164,29 @@ class RGBA_PT_export_to_godot(Panel):
         row = layout.row(align=True)
         layout.prop(addon_prefs,"categories")
         row = layout.row(align=True)
+        godot_folder,godot_cat,folder_name,file_name = get_full_path(self,context)
         if not bpy.data.is_saved:
             row.label(text='Please save the file before exporting it !',
                       icon='FILE_BLEND')
+        elif not godot_folder:
+            row.label(text="Please setup the godot folder in the addon preferences.",
+                icon="ERROR")
         else:
-            # TODO check that the godot path is setuped
             filename = bpy.path.basename(bpy.context.blend_data.filepath)[:-6]
+
             row = layout.row(align=True)
             row.operator("rgba.export_collection",icon="EXPORT")
             row = layout.row(align=True)
-            row.label(text=f"Your model will be exported at : {filename}.glb")
+            full_path = join(godot_folder,godot_cat,folder_name,file_name)
+            if exists(full_path):
+                info = stat(full_path)
+                row.label(text=f"File {full_path} already exists and will overwritten !",
+                          icon="INFO")
+                row = layout.row(align=True)
+                row.label(text=f"File was last modified on :{datetime.datetime.fromtimestamp(info.st_mtime).strftime('%Y-%m-%d-%H:%M')}")
+            else:
+                row.label(text=f"File will be saved at {full_path}.")
+
 
 
 # Registration
