@@ -40,7 +40,7 @@ class RGBaAddonPreferences(AddonPreferences):
         #     l.append((cat, cat, cat))
         l.append(('props','Props',""))
         l.append(('chars','Chars',""))
-        l.append(('set','Set',""))
+        l.append(('level','Level',""))
         return l;
 
     categories :EnumProperty( items = get_items)
