@@ -30,7 +30,12 @@ class RGBaAddonPreferences(AddonPreferences):
 
     user_export_categories: StringProperty(
         name="Export Categories (separated by a coma)",
-        default='props, chars, set'
+        default='props, chars, level'
+    )
+
+    props_prefix : StringProperty(
+        name="Props instance prefix",
+        default='p_'
     )
 
     def get_items(self, context):
@@ -49,7 +54,12 @@ class RGBaAddonPreferences(AddonPreferences):
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "godot_project_folder")
+        layout.prop(self, "props_prefix")
         #layout.prop(self, "export_categories")
+
+def get_addon_prefs(context):
+    preferences = context.preferences
+    return preferences.addons[__name__].preferences
 
 
 def get_full_path(self,context):
@@ -87,9 +97,14 @@ def export_selected_collection(self,context):
     current_selection = context.selected_objects #we store the current selection
     bpy.ops.object.select_all(action='DESELECT')
 
-    col  = context.scene.collection.children[collection_to_export]
+    col = context.scene.collection.children[collection_to_export]
+
+    props_prefix = get_addon_prefs(context).props_prefix
     for obj in col.objects:
-     obj.select_set(True)
+        if obj.type == 'EMPTY' and obj.name.startswith(props_prefix):
+            print('On a trouvé un EMpty !!')
+            obj.instance_type = 'NONE'
+        obj.select_set(True)
 
     bpy.ops.export_scene.gltf(export_format='GLB',
                               ui_tab='GENERAL',
@@ -104,7 +119,7 @@ def export_selected_collection(self,context):
                               export_colors=True,
                               export_cameras=False,
                               export_selected=False,
-                              use_selection=False,
+                              use_selection=True,
                               export_extras=False,
                               export_yup=True,
                               export_apply=False,
@@ -123,6 +138,11 @@ def export_selected_collection(self,context):
                               will_save_settings=False,
                               filepath=export_path,
                               check_existing=False)
+
+  # We restore instances dupligroup
+    for obj in col.objects:
+      if obj.type == 'EMPTY' and obj.name.startswith(props_prefix):
+          obj.instance_type = 'COLLECTION'
 
     bpy.ops.object.select_all(action='DESELECT')
     for obj in current_selection:
